@@ -54,7 +54,6 @@ We replace the LLM policy with deterministic rules based on BM25 scores and quer
 | Queries  | 300 test queries |
 | Metric   | nDCG@10 (same as the paper) |
 
-<<<<<<< HEAD
 ---
 
 ## Key Concepts
