@@ -66,6 +66,7 @@ We replace the LLM policy with deterministic rules based on BM25 scores and quer
 **State equivalence** — if the query and document ranking are identical to the previous step, the system is in a loop and stops. This is the core anti-redundancy mechanism from the paper (Section 3.1).
 
 **nDCG@10** — normalised Discounted Cumulative Gain at rank 10. Measures whether relevant documents appear near the top of the ranking. 1.0 = perfect, 0.0 = worst. Standard metric in IR research.
+
 =======
 
 ## References
