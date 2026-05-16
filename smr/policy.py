@@ -4,27 +4,27 @@ smr/policy.py
 The heuristic policy that replaces the LLM judge in SMR.
 
 In the paper (Section 3.3), the LLM reads the current state (q, D) and
-selects one of {REFINE, RERANK, STOP}. Here we replace that LLM call with
-deterministic rules based on observable signals in the state.
+selects one of {REFINE, RERANK, STOP}. Here we replace that with rules.
+
+Design philosophy — "explore first, stop when confident":
+  The paper's LLM heavily favours REFINE early (Table 3: 55–63% of actions
+  on hard queries are REFINE). A conservative "STOP by default" policy
+  wastes the state machine entirely. Instead we bias toward exploration
+  and only stop when we have positive evidence the results are good.
 
 Decision logic (applied in order):
-  1. Redundant state?               → STOP   (state machine check, no LLM needed)
-  2. Strong top-doc signal?         → STOP   (we already have a great result)
-  3. Query too short / vague?       → REFINE (expand before judging ranking)
-  4. Top-doc signal very weak?      → REFINE (search harder, different terms)
-  5. Scores bunched together?       → RERANK (good docs present, wrong order)
-  6. Default                        → STOP   (conservative fallback)
-
-This maps directly to the paper's prompt heuristics (Table 5):
-  "Choose REFINE when the query is vague or results unsatisfactory"
-  "Prefer STOP only when confident no further improvement is possible"
+  0. Equivalent state?              → STOP   (we're in a loop — cut it)
+  1. First step AND score very high → STOP   (already great, no point)
+  2. First step                     → REFINE (always try to improve once)
+  3. Score improved vs last step?   → RERANK (docs changed, fix ordering)
+  4. Score is high enough now       → STOP   (good enough after refinement)
+  5. Top-2 scores are bunched       → RERANK (ordering uncertain)
+  6. Default                        → STOP   (no improvement signal)
 """
 
 from typing import Optional
 from smr.state import RetrievalState
 
-
-# ── Action constants ───────────────────────────────────────────────────────
 
 REFINE = "REFINE"
 RERANK = "RERANK"
@@ -32,79 +32,75 @@ STOP   = "STOP"
 
 
 class HeuristicPolicy:
-    """
-    Rule-based action selector. Parameters are tunable hyperparameters
-    you can experiment with (see run_experiment.py --help).
-    """
 
     def __init__(
         self,
-        stop_score_high: float = 8.0,   # BM25 score → definitely stop
-        stop_score_low:  float = 1.5,   # BM25 score → definitely refine
+        stop_score_high: float = 15.0,  # BM25 score → definitely stop
         min_query_words: int   = 3,     # shorter than this → refine first
-        score_gap_ratio: float = 0.10,  # top/2nd score gap < 10% → rerank
+        score_gap_ratio: float = 0.20,  # top/2nd gap < 20% → rerank
     ):
         """
         Args:
-            stop_score_high : If top-doc BM25 score >= this, results are great → STOP
-            stop_score_low  : If top-doc BM25 score <  this, results are poor  → REFINE
-            min_query_words : Queries shorter than this get REFINE regardless of score
-            score_gap_ratio : If (score1 - score2) / score1 < ratio, scores are
-                              bunched → doc ordering is uncertain → RERANK
+            stop_score_high : If top-doc score >= this, results are great → STOP
+                              Set based on your corpus. SciFact BM25 scores
+                              typically range 1–25, so 15 is a high-confidence bar.
+            min_query_words : Queries shorter than this always get REFINE first.
+            score_gap_ratio : If (score1 - score2) / score1 < ratio,
+                              ranking is uncertain → RERANK.
         """
-        self.stop_high  = stop_score_high
-        self.stop_low   = stop_score_low
-        self.min_words  = min_query_words
-        self.gap_ratio  = score_gap_ratio
+        self.stop_high = stop_score_high
+        self.min_words = min_query_words
+        self.gap_ratio = score_gap_ratio
 
     def select_action(
         self,
         state: RetrievalState,
         previous_state: Optional[RetrievalState],
     ) -> str:
-        """
-        Given the current state and the previous state, return one of
-        REFINE / RERANK / STOP.
-
-        Args:
-            state          : current (query, documents) state
-            previous_state : the state from the previous step (or None)
-
-        Returns:
-            one of the three action strings
-        """
-        # ── Rule 0: Equivalent state → STOP (paper Section 3.1) ──────────
-        # This is the core anti-redundancy mechanism from the paper.
-        if previous_state is not None and state == previous_state:
-            return STOP
-
         top   = state.top_score()
         words = len(state.query.split())
+        is_first_step = previous_state is None
 
-        # ── Rule 1: Very high signal → already great → STOP ───────────────
-        if top >= self.stop_high:
+        # ── Rule 0: Equivalent state → STOP ──────────────────────────────
+        # We're in a loop — both query and ranking are unchanged.
+        # This is the core anti-redundancy check from Section 3.1.
+        if not is_first_step and state == previous_state:
             return STOP
 
-        # ── Rule 2: Short query → expand before doing anything else ───────
-        # Short queries are almost always underspecified.
-        if words < self.min_words:
+        # ── Rule 1: First step + very high score → already excellent ──────
+        # The retriever got lucky. No need to do anything.
+        if is_first_step and top >= self.stop_high:
+            return STOP
+
+        # ── Rule 2: First step → always try to improve once ───────────────
+        # Inspired by the paper's "explore-first" pattern (Table 3).
+        # Short queries obviously need expansion. But even long queries
+        # benefit from PRF: the original query may miss domain vocabulary.
+        if is_first_step:
             return REFINE
 
-        # ── Rule 3: Very weak signal → corpus has nothing useful → REFINE ─
-        # This is the analogue of SMR's REFINE for "unsatisfactory results".
-        if top < self.stop_low:
-            return REFINE
+        # ── From here: we've done at least one REFINE ─────────────────────
 
-        # ── Rule 4: Scores are bunched → ranking is uncertain → RERANK ────
-        # If the top two docs score almost the same, their order is arbitrary
-        # and a BM25 rescore with the (possibly refined) query may fix it.
-        if len(state.documents) >= 2:
-            score1 = state.scores.get(state.documents[0], 0.0)
-            score2 = state.scores.get(state.documents[1], 0.0)
-            if score1 > 0 and (score1 - score2) / score1 < self.gap_ratio:
+        # ── Rule 3: Score improved after REFINE → fix the ordering ────────
+        # New documents joined the list. The ranking was computed with the
+        # old query — rescore everything against the refined query.
+        if previous_state is not None:
+            prev_top = previous_state.top_score()
+            if top > prev_top * 1.05:   # score went up by > 5% → rerank
                 return RERANK
 
-        # ── Default: moderate signal, query is fine → STOP ────────────────
+        # ── Rule 4: Score is now high enough → stop ───────────────────────
+        if top >= self.stop_high * 0.7:  # 70% of the high threshold
+            return STOP
+
+        # ── Rule 5: Top-2 scores are bunched → ordering is uncertain ──────
+        if len(state.documents) >= 2:
+            s1 = state.scores.get(state.documents[0], 0.0)
+            s2 = state.scores.get(state.documents[1], 0.0)
+            if s1 > 0 and (s1 - s2) / s1 < self.gap_ratio:
+                return RERANK
+
+        # ── Default: no signal to act → stop ──────────────────────────────
         return STOP
 
 
@@ -112,10 +108,10 @@ if __name__ == "__main__":
     from smr.state import RetrievalState
 
     policy = HeuristicPolicy()
-    s0 = RetrievalState("LLM", ["d1", "d2"], {"d1": 0.8, "d2": 0.7})
-    s1 = RetrievalState("What is a Large Language Model", ["d1", "d2"], {"d1": 9.5, "d2": 6.1})
-    s2 = RetrievalState("What is a Large Language Model", ["d1", "d2"], {"d1": 9.5, "d2": 6.1})
+    s0 = RetrievalState("LLM", ["d1", "d2"], {"d1": 2.0, "d2": 1.8})
+    s1 = RetrievalState("What is a Large Language Model transformer", ["d1","d2","d3"], {"d1": 8.0, "d2": 5.0, "d3": 2.0})
+    s2 = RetrievalState("What is a Large Language Model transformer", ["d1","d2","d3"], {"d1": 8.0, "d2": 5.0, "d3": 2.0})
 
-    print(policy.select_action(s0, None))    # → REFINE  (query too short)
-    print(policy.select_action(s1, s0))      # → STOP    (high score)
-    print(policy.select_action(s2, s1))      # → STOP    (equivalent state)
+    print(policy.select_action(s0, None))   # → REFINE (first step)
+    print(policy.select_action(s1, s0))     # → RERANK (score improved)
+    print(policy.select_action(s2, s1))     # → STOP   (equivalent state)

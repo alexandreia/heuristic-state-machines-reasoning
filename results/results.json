@@ -1,0 +1,73 @@
+{
+  "args": {
+    "n": null,
+    "split": "test",
+    "top_k": 10,
+    "max_steps": 8,
+    "stop_high": 15.0,
+    "min_words": 3,
+    "n_feedback": 3,
+    "n_terms": 5,
+    "verbose": false,
+    "out": "results/results.json"
+  },
+  "results": {
+    "BM25 Baseline": {
+      "ndcg": 0.6662904863619633,
+      "mean_steps": 1.0,
+      "refine_ratio": 0.0,
+      "rerank_ratio": 0.0,
+      "action_counts": {
+        "STOP": 300
+      },
+      "stop_reasons": {
+        "baseline": 300
+      },
+      "step_distribution": {
+        "1": 300
+      }
+    },
+    "SMR (PRF)": {
+      "ndcg": 0.6646238196952966,
+      "mean_steps": 1.1,
+      "refine_ratio": 0.06666666666666667,
+      "rerank_ratio": 0.024242424242424242,
+      "action_counts": {
+        "REFINE": 22,
+        "RERANK": 8,
+        "STOP": 300
+      },
+      "stop_reasons": {
+        "equivalent_state": 4,
+        "high_score": 278,
+        "policy_stop": 18
+      },
+      "step_distribution": {
+        "4": 4,
+        "1": 278,
+        "2": 18
+      }
+    },
+    "SMR (Synonyms)": {
+      "ndcg": 0.6650602522072014,
+      "mean_steps": 1.1,
+      "refine_ratio": 0.06666666666666667,
+      "rerank_ratio": 0.024242424242424242,
+      "action_counts": {
+        "REFINE": 22,
+        "RERANK": 8,
+        "STOP": 300
+      },
+      "stop_reasons": {
+        "equivalent_state": 4,
+        "high_score": 278,
+        "policy_stop": 18
+      },
+      "step_distribution": {
+        "4": 4,
+        "1": 278,
+        "2": 18
+      }
+    }
+  }
+}
