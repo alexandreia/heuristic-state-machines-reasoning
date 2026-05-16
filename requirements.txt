@@ -1,0 +1,11 @@
+# Core IR + evaluation
+beir
+rank-bm25
+pytrec_eval
+nltk
+
+# LLM wiring (OpenAI SDK works for both OpenAI and Ollama)
+openai
+
+# Utilities
+requests
