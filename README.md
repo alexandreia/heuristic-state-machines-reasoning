@@ -1,6 +1,6 @@
 # Heuristic State Machine Reasoning for Information Retrieval
 
-**Course project** — inspired by [Lee et al., 2025 — *From Token to Action: State Machine Reasoning to Mitigate Overthinking in IR*](https://aclanthology.org/2025.findings-emnlp.xxx)
+**Course project** — inspired by Lee et al., 2025
 
 ---
 
