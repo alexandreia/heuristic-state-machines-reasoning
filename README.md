@@ -14,7 +14,6 @@ We replace the LLM policy with deterministic rules based on BM25 scores and quer
 
 ---
 
-=======
 ## Project Structure
 
 ```
