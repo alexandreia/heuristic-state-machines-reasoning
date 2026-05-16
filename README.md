@@ -14,51 +14,7 @@ We replace the LLM policy with deterministic rules based on BM25 scores and quer
 
 ---
 
-<<<<<<< HEAD
 =======
-## How It Works
-
-```
-Query q₀
-    │
-    ▼
-BM25 Retrieval → D₀ (top-10 docs)
-    │
-    ▼  State s = (q, D)
-    │
-┌───────────────────────────────────────┐
-│  Heuristic Policy                     │
-│                                       │
-│  equivalent to previous state? → STOP │
-│  BM25 score ≥ 8.0?             → STOP │
-│  query < 3 words?              → REFINE│
-│  BM25 score < 1.5?             → REFINE│
-│  top scores bunched together?  → RERANK│
-│  default                       → STOP  │
-│                                       │
-│  REFINE → PRF expands query           │
-│           retrieve new docs           │
-│           merge with existing list    │
-│                                       │
-│  RERANK → BM25 rescores all docs     │
-│           against current query       │
-└───────────────────────────────────────┘
-    │
-    ▼
-Final (query, ranked docs) → nDCG@10
-```
-
-| Paper (LLM SMR)     | This project (Heuristic SMR) |
-|---------------------|------------------------------|
-| LLM policy          | 4 ordered heuristic rules    |
-| LLM query rewriting | Pseudo-Relevance Feedback    |
-| LLM reranking       | BM25 rescoring               |
-| State equivalence   | Identical                    |
-| Hallucination guard | Identical                    |
-
----
-
->>>>>>> 2d29f60 (Adding synonym based system)
 ## Project Structure
 
 ```
@@ -111,69 +67,6 @@ Final (query, ranked docs) → nDCG@10
 
 **nDCG@10** — normalised Discounted Cumulative Gain at rank 10. Measures whether relevant documents appear near the top of the ranking. 1.0 = perfect, 0.0 = worst. Standard metric in IR research.
 =======
-Downloaded automatically on first run.
-
----
-
-## Setup
-
-```bash
-pip install -r requirements.txt
-```
-
----
-
-## Running Experiments
-
-```bash
-# Quick sanity check — 5 queries, prints every step
-python run_experiment.py --n 5 --verbose
-
-# Full experiment (all 300 queries)
-python run_experiment.py
-
-# Tune hyperparameters
-python run_experiment.py --stop_high 10 --stop_low 2 --n_terms 4 --max_steps 6
-```
-
-### All flags
-
-| Flag | Default | What it controls |
-|------|---------|-----------------|
-| `--n` | all 300 | number of queries to run |
-| `--top_k` | 10 | docs retrieved per step |
-| `--max_steps` | 8 | hard cap on reasoning steps |
-| `--stop_high` | 8.0 | BM25 score → stop immediately |
-| `--stop_low` | 1.5 | BM25 score → trigger REFINE |
-| `--min_words` | 3 | query length → trigger REFINE |
-| `--n_feedback` | 3 | PRF: feedback docs for expansion |
-| `--n_terms` | 5 | PRF: new terms added per REFINE |
-| `--verbose` | off | print per-query step trace |
-
-### Test individual modules
-
-```bash
-python -m data.loader        # check SciFact loads correctly
-python -m retrieval.bm25     # test retrieval on a sample query
-python -m smr.engine         # trace one query through the state machine
-python -m eval.metrics       # sanity check nDCG computation
-```
-
----
-
-## Output
-
-```
-Method               nDCG@10   Avg Steps   REFINE%   RERANK%
-───────────────────────────────────────────────────────────────
-BM25 Baseline         0.6650        1.00      0.0%      0.0%
-Heuristic SMR         0.68xx        x.xx     xx.x%     xx.x%
-```
-
-Full results saved to `results/results.json`.
->>>>>>> 2d29f60 (Adding synonym based system)
-
----
 
 ## References
 
