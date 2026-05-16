@@ -1,6 +1,6 @@
 # Heuristic State Machine Reasoning for Information Retrieval
 
-**Course project** — inspired by Lee et al., 2025
+**Course project** 
 
 ---
 
