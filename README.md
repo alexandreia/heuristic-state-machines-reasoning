@@ -14,12 +14,6 @@ We replace the LLM policy with deterministic rules based on BM25 scores and quer
 
 **SciFact** from the [BEIR benchmark](https://github.com/beir-cellar/beir)
 
-| Property | Value |
-|----------|-------|
-| Corpus   | 5,183 biomedical paper abstracts |
-| Queries  | 300 test queries |
-| Metric   | nDCG@10 (same as the paper) |
-
 ## Key Concepts
 
 **BM25** — sparse retriever based on term frequency and inverse document frequency. Used as the baseline and as the underlying retriever in both SMR variants.
